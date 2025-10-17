@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""
+udp_mail_server.py
+Simple UDP relay that accepts JSON messages and forwards them to the destination IP:port.
+
+Message format (JSON, UTF-8 encoded bytes):
+{
+  "from": "1.2.3.4:5555",
+  "to":   "5.6.7.8:6666",
+  "subject": "Hello",
+  "body": "This is a test.",
+  "metadata": { ... }  # optional
+}
+
+If "to" is missing or malformed the server will return an error packet to the sender.
+"""
+
+import argparse
+import json
+import socket
+import threading
+import sys
+import time
+
+BUFFER_SIZE = 8192
+
+def parse_ip_port(text):
+    """Return (ip, port) or raise ValueError."""
+    if not text or ':' not in text:
+        raise ValueError("Expected 'ip:port'")
+    ip, port_str = text.rsplit(':', 1)
+    port = int(port_str)
+    return ip, port
+
+def make_error_packet(error_msg):
+    payload = {"error": True, "message": error_msg}
+    return json.dumps(payload).encode('utf-8')
+
+def handle_packet(data, addr, server_sock):
+    """Process a received datagram and forward if valid."""
+    try:
+        text = data.decode('utf-8')
+        packet = json.loads(text)
+        to_field = packet.get('to')
+        if not to_field:
+            err = "Missing 'to' field"
+            server_sock.sendto(make_error_packet(err), addr)
+            print(f"[{addr}] Error: {err}")
+            return
+
+        dest_ip, dest_port = parse_ip_port(to_field)
+        # Optional: attach original sender info if not provided
+        if 'from' not in packet or not packet['from']:
+            packet['from'] = f"{addr[0]}:{addr[1]}"
+
+        # Forward the original JSON to destination
+        forward_bytes = json.dumps(packet).encode('utf-8')
+        server_sock.sendto(forward_bytes, (dest_ip, dest_port))
+        print(f"[{addr}] -> forwarded to {dest_ip}:{dest_port} subject='{packet.get('subject','')}'")
+    except json.JSONDecodeError:
+        err = "Invalid JSON"
+        server_sock.sendto(make_error_packet(err), addr)
+        print(f"[{addr}] Error: invalid JSON")
+    except ValueError as e:
+        server_sock.sendto(make_error_packet(str(e)), addr)
+        print(f"[{addr}] Error: {e}")
+    except Exception as e:
+        # Unexpected; notify sender
+        try:
+            server_sock.sendto(make_error_packet(f"Server error: {e}"), addr)
+        except:
+            pass
+        print(f"[{addr}] Unexpected error handling packet: {e}")
+
+def start_server(listen_ip='0.0.0.0', listen_port=9999):
+    print(f"Starting UDP Mail Relay on {listen_ip}:{listen_port}")
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_sock.bind((listen_ip, listen_port))
+    try:
+        while True:
+            try:
+                data, addr = server_sock.recvfrom(BUFFER_SIZE)
+                # Handle each packet in a short-lived thread so a slow send doesn't block receiving.
+                t = threading.Thread(target=handle_packet, args=(data, addr, server_sock), daemon=True)
+                t.start()
+            except KeyboardInterrupt:
+                print("Shutting down (keyboard interrupt)...")
+                break
+            except Exception as e:
+                print("Receive loop error:", e)
+                # small sleep to avoid tight spin on repeated errors
+                time.sleep(0.1)
+    finally:
+        server_sock.close()
+        print("Server socket closed.")
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description="UDP Mail Relay Server")
+    ap.add_argument('--ip', default='0.0.0.0', help='listen IP (default 0.0.0.0)')
+    ap.add_argument('--port', default=9999, type=int, help='listen port (default 9999)')
+    args = ap.parse_args()
+    start_server(args.ip, args.port)
