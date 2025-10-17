@@ -17,6 +17,9 @@ import socket
 import threading
 import json
 import time
+from PyQt5 import QtWidgets
+import sys
+from Dashboard import Ui_MainWindow
 
 BUFFER_SIZE = 8192
 
@@ -151,6 +154,11 @@ class UDPMailClient:
 
 if __name__ == "__main__":
     # quick demo when run as a script
+    app = QtWidgets.QApplication(sys.argv)
+    MainWindow = QtWidgets.QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(MainWindow)
+    MainWindow.show()
     def demo_cb(packet, addr):
         print("Demo received:", packet, "from", addr)
 
