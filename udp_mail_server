@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """
-mail_server.py  — TCP Mail Relay Server
---------------------------------------
-A simple TCP relay that accepts JSON messages and forwards them
+udp_mail_server2.py
+--------------------
+A simple UDP relay that accepts JSON messages and forwards them
 to the destination IP:port (client or another server).
+to the destination IP:port (client or another server).
+=======
+udp_mail_server2.py
+Simple UDP relay that accepts JSON messages and forwards them to the destination IP:port.
+>>>>>>> 641325d534ac9d42d65b13547d73d7c89e36ecdc
 
 Supports server-to-server forwarding.
 
