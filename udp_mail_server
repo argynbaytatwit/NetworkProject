@@ -1,102 +1,151 @@
 #!/usr/bin/env python3
 """
-udp_mail_server.py
-Simple UDP relay that accepts JSON messages and forwards them to the destination IP:port.
+mail_server.py  — TCP Mail Relay Server
+--------------------------------------
+A simple TCP relay that accepts JSON messages and forwards them
+to the destination IP:port (client or another server).
 
-Message format (JSON, UTF-8 encoded bytes):
+Supports server-to-server forwarding.
+
+Message format:
 {
-  "from": "1.2.3.4:5555",
-  "to":   "5.6.7.8:6666",
-  "subject": "Hello",
-  "body": "This is a test.",
-  "metadata": { ... }  # optional
+  "from": "ip:port",
+  "to": "ip:port",
+  "subject": "...",
+  "body": "...",
+  "metadata": {...}  # optional
 }
-
-If "to" is missing or malformed the server will return an error packet to the sender.
 """
 
-import argparse
-import json
 import socket
 import threading
-import sys
+import json
+import argparse
 import time
 
 BUFFER_SIZE = 8192
 
+# --- Routing configuration ---
+# Modify this according to your server network
+ROUTING_TABLE = {
+    "local_prefixes": ["172.20.10."],  # IP ranges for local clients
+    "servers": {
+        "server2": ("192.168.1.10", 9999)  # another TCP relay server
+    }
+}
+
+
+# --- Helper Functions ---
 def parse_ip_port(text):
-    """Return (ip, port) or raise ValueError."""
+    """Return (ip, port) tuple from 'ip:port' string."""
     if not text or ':' not in text:
-        raise ValueError("Expected 'ip:port'")
+        raise ValueError("Expected 'ip:port' format")
     ip, port_str = text.rsplit(':', 1)
     port = int(port_str)
     return ip, port
 
-def make_error_packet(error_msg):
-    payload = {"error": True, "message": error_msg}
-    return json.dumps(payload).encode('utf-8')
 
-def handle_packet(data, addr, server_sock):
-    """Process a received datagram and forward if valid."""
+def is_local_ip(ip):
+    """Return True if IP appears to belong to local network."""
+    for prefix in ROUTING_TABLE["local_prefixes"]:
+        if ip.startswith(prefix):
+            return True
+    return False
+
+
+def make_error_packet(message):
+    """Create a JSON error packet."""
+    return json.dumps({"error": True, "message": message}).encode("utf-8")
+
+
+# --- Core Handler ---
+def handle_client(conn, addr):
+    """Handle a single TCP client connection."""
     try:
-        text = data.decode('utf-8')
-        packet = json.loads(text)
-        to_field = packet.get('to')
+        data = conn.recv(BUFFER_SIZE)
+        if not data:
+            return
+        try:
+            packet = json.loads(data.decode("utf-8"))
+        except json.JSONDecodeError:
+            conn.sendall(make_error_packet("Invalid JSON"))
+            print(f"[{addr}] Invalid JSON")
+            return
+
+        # Validate destination
+        to_field = packet.get("to")
         if not to_field:
-            err = "Missing 'to' field"
-            server_sock.sendto(make_error_packet(err), addr)
-            print(f"[{addr}] Error: {err}")
+            conn.sendall(make_error_packet("Missing 'to' field"))
+            print(f"[{addr}] Error: missing 'to'")
             return
 
         dest_ip, dest_port = parse_ip_port(to_field)
-        # Optional: attach original sender info if not provided
-        if 'from' not in packet or not packet['from']:
-            packet['from'] = f"{addr[0]}:{addr[1]}"
+        if "from" not in packet or not packet["from"]:
+            packet["from"] = f"{addr[0]}:{addr[1]}"
 
-        # Forward the original JSON to destination
-        forward_bytes = json.dumps(packet).encode('utf-8')
-        server_sock.sendto(forward_bytes, (dest_ip, dest_port))
-        print(f"[{addr}] -> forwarded to {dest_ip}:{dest_port} subject='{packet.get('subject','')}'")
-    except json.JSONDecodeError:
-        err = "Invalid JSON"
-        server_sock.sendto(make_error_packet(err), addr)
-        print(f"[{addr}] Error: invalid JSON")
-    except ValueError as e:
-        server_sock.sendto(make_error_packet(str(e)), addr)
-        print(f"[{addr}] Error: {e}")
+        forward_bytes = json.dumps(packet).encode("utf-8")
+
+        if is_local_ip(dest_ip):
+            # Forward directly to local client
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.connect((dest_ip, dest_port))
+                    s.sendall(forward_bytes)
+                    print(f"[{addr}] -> delivered locally to {dest_ip}:{dest_port}")
+                except Exception as e:
+                    print(f"[{addr}] Failed local delivery to {dest_ip}:{dest_port} ({e})")
+                    conn.sendall(make_error_packet(f"Local delivery failed: {e}"))
+        else:
+            # Forward to another server
+            next_server_ip, next_server_port = ROUTING_TABLE["servers"]["server2"]
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.connect((next_server_ip, next_server_port))
+                    s.sendall(forward_bytes)
+                    print(f"[{addr}] -> forwarded to server2 ({next_server_ip}:{next_server_port}) for {dest_ip}:{dest_port}")
+                except Exception as e:
+                    print(f"[{addr}] Failed server forwarding: {e}")
+                    conn.sendall(make_error_packet(f"Forwarding failed: {e}"))
+
     except Exception as e:
-        # Unexpected; notify sender
+        print(f"[{addr}] Unexpected error: {e}")
         try:
-            server_sock.sendto(make_error_packet(f"Server error: {e}"), addr)
+            conn.sendall(make_error_packet(f"Server error: {e}"))
         except:
             pass
-        print(f"[{addr}] Unexpected error handling packet: {e}")
+    finally:
+        conn.close()
 
-def start_server(listen_ip='0.0.0.0', listen_port=9999):
-    print(f"Starting UDP Mail Relay on {listen_ip}:{listen_port}")
-    server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+def start_server(listen_ip="0.0.0.0", listen_port=9999):
+    """Start TCP Mail Relay Server."""
+    print(f"Starting TCP Mail Relay on {listen_ip}:{listen_port}")
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_sock.bind((listen_ip, listen_port))
+    server_sock.listen(10)
+    print("Server is listening for connections...")
+
     try:
         while True:
             try:
-                data, addr = server_sock.recvfrom(BUFFER_SIZE)
-                # Handle each packet in a short-lived thread so a slow send doesn't block receiving.
-                t = threading.Thread(target=handle_packet, args=(data, addr, server_sock), daemon=True)
-                t.start()
+                conn, addr = server_sock.accept()
+                print(f"Incoming connection from {addr}")
+                threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
             except KeyboardInterrupt:
-                print("Shutting down (keyboard interrupt)...")
+                print("\nKeyboard interrupt — shutting down.")
                 break
             except Exception as e:
-                print("Receive loop error:", e)
-                # small sleep to avoid tight spin on repeated errors
+                print(f"Accept loop error: {e}")
                 time.sleep(0.1)
     finally:
         server_sock.close()
-        print("Server socket closed.")
+        print("Server stopped.")
+
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="UDP Mail Relay Server")
-    ap.add_argument('--ip', default='0.0.0.0', help='listen IP (default 0.0.0.0)')
-    ap.add_argument('--port', default=9999, type=int, help='listen port (default 9999)')
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser(description="TCP Mail Relay Server")
+    parser.add_argument("--ip", default="0.0.0.0", help="IP to listen on")
+    parser.add_argument("--port", default=9999, type=int, help="Port to listen on")
+    args = parser.parse_args()
     start_server(args.ip, args.port)
