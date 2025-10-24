@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-udp_mail_server.py
+udp_mail_server2.py
 Simple UDP relay that accepts JSON messages and forwards them to the destination IP:port.
 
 Message format (JSON, UTF-8 encoded bytes):
