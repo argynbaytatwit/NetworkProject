@@ -5,9 +5,11 @@ import sys
 import json
 import socket
 import threading
+from login import Ui_loginWindow
 from PyQt5 import QtWidgets, uic
+import random
 
-
+users = {}  # to hold dictionary of users and port number 
 # ---------------- TCP CLIENT CLASS ---------------- #
 class TCPMailClient:
     def __init__(self, listen_port):
@@ -166,11 +168,39 @@ class MailApp(QtWidgets.QMainWindow):
         scene.addText(text)
         self.graphics_view.setScene(scene)
 
+class Login(QtWidgets.QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.ui = Ui_loginWindow()
+        self.ui.setupUi(self)
+        self.ui.loginButton.clicked.connect(self.validateLogin)
 
+    def validateLogin(self):
+        username = self.ui.usernameEdit.text()
+        port_str = self.ui.portNum.text()
+        port = int(port_str) if port_str.isdigit() else None
+
+        if port == 0:
+            port = random.randint(1024, 65535) # assign random port if none 
+        if port < 1024 or port > 65535: #check port range if one provided
+            QtWidgets.QMessageBox.warning(self, "Error", "Port number must be between 1024 and 65535.")
+            return
+        
+        if username != None  and self.ui.termsCheck.isChecked():
+            users[username] = port  # store user info then proceed to chat
+            self.mail_app = MailApp()
+            self.mail_app.show()
+            self.close()
+        else:
+            QtWidgets.QMessageBox.warning(self, "Error", "Invalid Login Details or Terms not accepted.")
+
+
+        
 def main():
+    import sys
     app = QtWidgets.QApplication(sys.argv)
-    window = MailApp()
-    window.show()
+    loginWindow = Login()
+    loginWindow.show()
     sys.exit(app.exec_())
 
 
