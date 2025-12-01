@@ -48,7 +48,7 @@ class Ui_MainWindow(object):
         self.scrollArea.setWidget(self.scrollAreaWidgetContents)
         self.verticalScrollBar = QtWidgets.QScrollBar(self.centralwidget)
         self.verticalScrollBar.setGeometry(QtCore.QRect(860, 90, 20, 71))
-       # self.verticalScrollBar.setOrientation(QtCore.Qt.Qt::Orientation::Vertical)
+       # self.verticalScrollBar.setOrientation(QtCore.Qt.Qt::Orientation::Vertical) not in use until display of messages is fixed
         self.verticalScrollBar.setObjectName("verticalScrollBar")
         self.graphicsView = QtWidgets.QGraphicsView(self.centralwidget)
         self.graphicsView.setGeometry(QtCore.QRect(500, 170, 361, 371))
@@ -67,6 +67,9 @@ class Ui_MainWindow(object):
         self.statusbar.setObjectName("statusbar")
         MainWindow.setStatusBar(self.statusbar)
         self.menubar.addAction(self.menuEmail_Client.menuAction())
+        self.logout_button = QtWidgets.QPushButton(self.centralwidget)
+        self.logout_button.setGeometry(QtCore.QRect(500, 570, 90, 29))
+        self.logout_button.setObjectName("logout_button")
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
@@ -81,3 +84,4 @@ class Ui_MainWindow(object):
         self.label_4.setText(_translate("MainWindow", "Message"))
         self.pushButton_2.setText(_translate("MainWindow", "Refresh"))
         self.menuEmail_Client.setTitle(_translate("MainWindow", "Email Client"))
+        self.logout_button.setText(_translate("MainWindow", "Logout"))

@@ -5,6 +5,7 @@ import sys
 import json
 import socket
 import threading
+from Dashboard import Ui_MainWindow
 from login import Ui_loginWindow
 from PyQt5 import QtWidgets, uic
 import random
@@ -91,23 +92,13 @@ class TCPMailClient:
 
 # ---------------- MAIN APP ---------------- #
 class MailApp(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, listen_port):
         super().__init__()
-        uic.loadUi("NetworkProgramming.ui", self)
+        self.ui = Ui_MainWindow()
+        self.ui.setupUi(self)
 
-        # UI elements
-        self.send_button = self.findChild(QtWidgets.QPushButton, "pushButton")
-        self.refresh_button = self.findChild(QtWidgets.QPushButton, "pushButton_2")
-        self.user_input = self.findChild(QtWidgets.QLineEdit, "lineEdit")
-        self.message_box = self.findChild(QtWidgets.QPlainTextEdit, "plainTextEdit")
-        self.graphics_view = self.findChild(QtWidgets.QGraphicsView, "graphicsView")
+        self.ui.logout_button.clicked.connect(self.logout)
 
-        # You’ll be prompted for a listen port
-        listen_port, ok = QtWidgets.QInputDialog.getInt(
-            self, "Listen Port", "Enter your local listening port:", 8000, 1024, 65535
-        )
-        if not ok:
-            sys.exit()
 
         self.client = TCPMailClient(listen_port)
         self.client.start_listener(self.on_message_received)
@@ -116,9 +107,15 @@ class MailApp(QtWidgets.QMainWindow):
         self.update_graphics_view(f"Listening on TCP port {listen_port}")
 
         # Connect buttons
-        self.send_button.clicked.connect(self.send_message)
-        self.refresh_button.clicked.connect(self.refresh_inbox)
-
+        self.ui.pushButton.clicked.connect(self.send_message)
+        self.ui.pushButton_2.clicked.connect(self.refresh_inbox)
+    def logout(self):
+        for i in users:
+            if users[i] == self.client.listen_port:
+                del users[i]
+                break
+        self.client.stop_listener()
+        self.close()
     def on_message_received(self, packet, addr):
         sender = packet.get("from", str(addr))
         subject = packet.get("subject", "(no subject)")
@@ -129,7 +126,7 @@ class MailApp(QtWidgets.QMainWindow):
         self.update_graphics_view(msg_text)
 
     def send_message(self):
-        """Send a message using relay specified in UI."""
+        """Send a message using user input in UI."""
         relay_info = self.user_input.text().strip()  # e.g. "172.20.10.4:9999"
         body = self.message_box.toPlainText().strip()
 
@@ -164,9 +161,12 @@ class MailApp(QtWidgets.QMainWindow):
         self.update_graphics_view("\n\n".join(self.inbox))
 
     def update_graphics_view(self, text):
+
         scene = QtWidgets.QGraphicsScene()
         scene.addText(text)
-        self.graphics_view.setScene(scene)
+        self.ui.graphicsView.setScene(scene)
+
+# ---------------- LOGIN WINDOW ---------------- #
 
 class Login(QtWidgets.QMainWindow):
     def __init__(self):
@@ -180,7 +180,7 @@ class Login(QtWidgets.QMainWindow):
         port_str = self.ui.portNum.text()
         port = int(port_str) if port_str.isdigit() else None
 
-        if port == 0:
+        if port == 0 or port is None:
             port = random.randint(1024, 65535) # assign random port if none 
         if port < 1024 or port > 65535: #check port range if one provided
             QtWidgets.QMessageBox.warning(self, "Error", "Port number must be between 1024 and 65535.")
@@ -188,7 +188,7 @@ class Login(QtWidgets.QMainWindow):
         
         if username != None  and self.ui.termsCheck.isChecked():
             users[username] = port  # store user info then proceed to chat
-            self.mail_app = MailApp()
+            self.mail_app = MailApp(port)
             self.mail_app.show()
             self.close()
         else:
