@@ -18,7 +18,7 @@ class TCPMailClient:
         self.listener_thread = None
         self.running = False
 
-    def _get_local_ip(self):
+    def _get_local_ip(self): # is this still needed? 
         """Return this machine’s local IP address."""
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -40,7 +40,6 @@ class TCPMailClient:
                 server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 server_sock.bind(("0.0.0.0", self.listen_port))
                 server_sock.listen(5)
-                print(f"[LISTENING] on TCP port {self.listen_port}")
                 while self.running:
                     try:
                         conn, addr = server_sock.accept()
@@ -60,9 +59,6 @@ class TCPMailClient:
 
         self.listener_thread = threading.Thread(target=listen, daemon=True)
         self.listener_thread.start()
-
-    def stop_listener(self):
-        self.running = False
 
     # ---------- SENDER ---------- #
     def send_via_relay(self, relay_ip, relay_port, to, subject, body, from_addr):
@@ -127,26 +123,32 @@ class MailApp(QtWidgets.QMainWindow):
 
     def send_message(self):
         """Send a message using user input in UI."""
-        relay_info = self.user_input.text().strip()  # e.g. "172.20.10.4:9999"
-        body = self.message_box.toPlainText().strip()
+        relay_info = self.ui.sendtoEdit.text().strip()  # e.g. ally or hunter
+        body = self.ui.user_message.toPlainText().strip()
 
         if not relay_info or not body:
             QtWidgets.QMessageBox.warning(self, "Error", "Please fill in all fields.")
             return
+        # Lookup relay IP and port from users dictionary
+        if relay_info in users:
+            ip, port = users[relay_info]
 
-        # Parse relay ip:port
-        if ":" not in relay_info:
-            QtWidgets.QMessageBox.warning(self, "Error", "Relay must be in ip:port format.")
+        else:
+            QtWidgets.QMessageBox.warning(self, "Error", f"Unknown user: {relay_info}")
             return
-        relay_ip, relay_port = relay_info.split(":")
-        relay_port = int(relay_port)
+        # Parse relay ip:port no longer needed?
+        #if ":" not in relay_info:
+        #   QtWidgets.QMessageBox.warning(self, "Error", "Relay must be in ip:port format.")
+        #    return
+        #relay_ip, relay_port = relay_info.split(":")
+        #relay_port = int(relay_port)
 
         subject = "Message from TCP Mail Client"
         from_addr = f"{self.client._get_local_ip()}:{self.client.listen_port}"
 
         resp = self.client.send_via_relay(
-            relay_ip=relay_ip,
-            relay_port=relay_port,
+            relay_ip=ip,
+            relay_port=port,
             to="relay",  # handled by the server logic
             subject=subject,
             body=body,
