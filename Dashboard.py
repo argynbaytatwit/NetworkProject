@@ -15,61 +15,111 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(928, 760)
+
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
-        self.user_message = QtWidgets.QPlainTextEdit(self.centralwidget)
-        self.user_message.setGeometry(QtCore.QRect(10, 170, 421, 371))
-        self.user_message.setObjectName("user_message")
-        self.pushButton = QtWidgets.QPushButton(self.centralwidget)
-        self.pushButton.setGeometry(QtCore.QRect(340, 570, 90, 29))
-        self.pushButton.setObjectName("pushButton")
-        self.sendtoEdit = QtWidgets.QLineEdit(self.centralwidget)
-        self.sendtoEdit.setGeometry(QtCore.QRect(10, 90, 291, 28))
-        self.sendtoEdit.setObjectName("sendtoEdit")
+        MainWindow.setCentralWidget(self.centralwidget)
+
+        # ----- MAIN LAYOUT (LEFT / RIGHT) -----
+        main_layout = QtWidgets.QHBoxLayout(self.centralwidget)
+        main_layout.setObjectName("main_layout")
+
+        # ================= LEFT SIDE (SEND MAIL) =================
+        left_layout = QtWidgets.QVBoxLayout()
+        left_layout.setObjectName("left_layout")
+
+        # Title label
         self.labelintro = QtWidgets.QLabel(self.centralwidget)
-        self.labelintro.setGeometry(QtCore.QRect(20, 10, 111, 20))
         self.labelintro.setObjectName("labelintro")
-        self.label_2 = QtWidgets.QLabel(self.centralwidget)
-        self.label_2.setGeometry(QtCore.QRect(500, 0, 63, 20))
-        self.label_2.setObjectName("label_2")
+        left_layout.addWidget(self.labelintro)
+
+        # User / SendTo row (form style)
+        form_layout = QtWidgets.QFormLayout()
+        form_layout.setObjectName("form_layout")
+
         self.user_label = QtWidgets.QLabel(self.centralwidget)
-        self.user_label.setGeometry(QtCore.QRect(10, 60, 63, 20))
         self.user_label.setObjectName("user_label")
+        self.sendtoEdit = QtWidgets.QLineEdit(self.centralwidget)
+        self.sendtoEdit.setObjectName("sendtoEdit")
+
+        form_layout.setWidget(0, QtWidgets.QFormLayout.LabelRole, self.user_label)
+        form_layout.setWidget(0, QtWidgets.QFormLayout.FieldRole, self.sendtoEdit)
+
+        left_layout.addLayout(form_layout)
+
+        # Message label + editor
         self.label_4 = QtWidgets.QLabel(self.centralwidget)
-        self.label_4.setGeometry(QtCore.QRect(10, 150, 63, 20))
         self.label_4.setObjectName("label_4")
+        left_layout.addWidget(self.label_4)
+
+        self.user_message = QtWidgets.QPlainTextEdit(self.centralwidget)
+        self.user_message.setObjectName("user_message")
+        left_layout.addWidget(self.user_message)
+
+        # Buttons row (Send / Logout) aligned right
+        button_row = QtWidgets.QHBoxLayout()
+        button_row.addStretch()
+
+        self.pushButton = QtWidgets.QPushButton(self.centralwidget)
+        self.pushButton.setObjectName("pushButton")
+        button_row.addWidget(self.pushButton)
+
+        self.logout_button = QtWidgets.QPushButton(self.centralwidget)
+        self.logout_button.setObjectName("logout_button")
+        button_row.addWidget(self.logout_button)
+
+        left_layout.addLayout(button_row)
+
+        # ================= RIGHT SIDE (INBOX / GRAPHICS) =================
+        right_layout = QtWidgets.QVBoxLayout()
+        right_layout.setObjectName("right_layout")
+
+        # Inbox header: label + Refresh button
+        header_layout = QtWidgets.QHBoxLayout()
+        header_layout.setObjectName("header_layout")
+
+        self.label_2 = QtWidgets.QLabel(self.centralwidget)
+        self.label_2.setObjectName("label_2")
+        header_layout.addWidget(self.label_2)
+
+        header_layout.addStretch()
+
+        self.pushButton_2 = QtWidgets.QPushButton(self.centralwidget)
+        self.pushButton_2.setObjectName("pushButton_2")
+        header_layout.addWidget(self.pushButton_2)
+
+        right_layout.addLayout(header_layout)
+
+        # Scroll area (inbox)
         self.scrollArea = QtWidgets.QScrollArea(self.centralwidget)
-        self.scrollArea.setGeometry(QtCore.QRect(500, 90, 361, 71))
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setObjectName("scrollArea")
         self.scrollAreaWidgetContents = QtWidgets.QWidget()
-        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 359, 69))
         self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
         self.scrollArea.setWidget(self.scrollAreaWidgetContents)
-        self.verticalScrollBar = QtWidgets.QScrollBar(self.centralwidget)
-        self.verticalScrollBar.setGeometry(QtCore.QRect(860, 90, 20, 71))
-       # self.verticalScrollBar.setOrientation(QtCore.Qt.Qt::Orientation::Vertical) not in use until display of messages is fixed
-        self.verticalScrollBar.setObjectName("verticalScrollBar")
+        right_layout.addWidget(self.scrollArea)
+
+        # Graphics view below inbox
         self.graphicsView = QtWidgets.QGraphicsView(self.centralwidget)
-        self.graphicsView.setGeometry(QtCore.QRect(500, 170, 361, 371))
         self.graphicsView.setObjectName("graphicsView")
-        self.pushButton_2 = QtWidgets.QPushButton(self.centralwidget)
-        self.pushButton_2.setGeometry(QtCore.QRect(500, 50, 90, 29))
-        self.pushButton_2.setObjectName("pushButton_2")
-        MainWindow.setCentralWidget(self.centralwidget)
+        right_layout.addWidget(self.graphicsView)
+
+        # Add left and right layouts to main layout
+        main_layout.addLayout(left_layout, 1)
+        main_layout.addLayout(right_layout, 1)
+
+        # ----- MENUBAR / STATUSBAR -----
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 928, 25))
         self.menubar.setObjectName("menubar")
         self.menuEmail_Client = QtWidgets.QMenu(self.menubar)
         self.menuEmail_Client.setObjectName("menuEmail_Client")
+        self.menubar.addAction(self.menuEmail_Client.menuAction())
         MainWindow.setMenuBar(self.menubar)
+
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
         MainWindow.setStatusBar(self.statusbar)
-        self.menubar.addAction(self.menuEmail_Client.menuAction())
-        self.logout_button = QtWidgets.QPushButton(self.centralwidget)
-        self.logout_button.setGeometry(QtCore.QRect(500, 570, 90, 29))
-        self.logout_button.setObjectName("logout_button")
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
