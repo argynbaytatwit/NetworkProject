@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 # main.py — TCP version (UI chooses relay IP/port)
 
+#!/usr/bin/env python3
+# main.py — TCP version (UI chooses relay by nickname)
+
+
 import sys
 import json
 import socket
 import threading
 from Dashboard import Ui_MainWindow
 from login import Ui_loginWindow
-from PyQt5 import QtWidgets, uic
+from PyQt5 import QtWidgets
 import random
 
-users = {}  # to hold dictionary of users and port number
+
+users = {}  # {username: (ip, port)}
 
 
 # ---------------- TCP CLIENT CLASS ---------------- #
@@ -20,17 +25,18 @@ class TCPMailClient:
         self.listener_thread = None
         self.running = False
 
-    def _get_local_ip(self):  # is this still needed?
+    def _get_local_ip(self):
         """Return this machine’s local IP address."""
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
+            # doesn't need to be reachable; just for routing lookup
             s.connect(("8.8.8.8", 80))
             ip = s.getsockname()[0]
         except Exception:
             ip = "127.0.0.1"
         finally:
             s.close()
-        return ip
+        return ip  # [web:68][web:72]
 
     # ---------- LISTENER ---------- #
     def start_listener(self, on_message_callback):
@@ -62,6 +68,10 @@ class TCPMailClient:
         self.listener_thread = threading.Thread(target=listen, daemon=True)
         self.listener_thread.start()
 
+    def stop_listener(self):
+        self.running = False
+        # listener thread will exit once next accept/loop completes
+
     # ---------- SENDER ---------- #
     def send_via_relay(self, relay_ip, relay_port, to, subject, body, from_addr):
         """Send message via relay (TCP)."""
@@ -90,8 +100,9 @@ class TCPMailClient:
 
 # ---------------- MAIN APP ---------------- #
 class MailApp(QtWidgets.QMainWindow):
-    def __init__(self, listen_port):
+    def __init__(self, username, listen_port):
         super().__init__()
+        self.username = username
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
@@ -101,17 +112,19 @@ class MailApp(QtWidgets.QMainWindow):
         self.client.start_listener(self.on_message_received)
         self.inbox = []
 
-        self.update_graphics_view(f"Listening on TCP port {listen_port}")
+        local_ip = self.client._get_local_ip()
+        self.update_graphics_view(
+            f"User: {self.username}\nIP: {local_ip}\nListening on TCP port {listen_port}"
+        )
 
         # Connect buttons
         self.ui.pushButton.clicked.connect(self.send_message)
         self.ui.pushButton_2.clicked.connect(self.refresh_inbox)
 
     def logout(self):
-        for i in users:
-            if users[i] == self.client.listen_port:
-                del users[i]
-                break
+        # remove this user from dictionary
+        if self.username in users:
+            del users[self.username]
         self.client.stop_listener()
         self.close()
 
@@ -126,41 +139,40 @@ class MailApp(QtWidgets.QMainWindow):
 
     def send_message(self):
         """Send a message using user input in UI."""
-        relay_info = self.ui.sendtoEdit.text().strip()  # e.g. ally or hunter
+        # relay_info is now just the OTHER USER'S NICKNAME
+        relay_nickname = self.ui.sendtoEdit.text().strip()
         body = self.ui.user_message.toPlainText().strip()
 
-        if not relay_info or not body:
+        if not relay_nickname or not body:
             QtWidgets.QMessageBox.warning(self, "Error", "Please fill in all fields.")
             return
-        # Lookup relay IP and port from users dictionary
-        if relay_info in users:
-            ip, port = users[relay_info]
 
+        # Lookup relay IP and port from users dictionary by nickname
+        if relay_nickname in users:
+            relay_ip, relay_port = users[relay_nickname]
         else:
-            QtWidgets.QMessageBox.warning(self, "Error", f"Unknown user: {relay_info}")
+            QtWidgets.QMessageBox.warning(
+                self, "Error", f"Unknown user: {relay_nickname}"
+            )
             return
-        # Parse relay ip:port no longer needed?
-        # if ":" not in relay_info:
-        #   QtWidgets.QMessageBox.warning(self, "Error", "Relay must be in ip:port format.")
-        #    return
-        # relay_ip, relay_port = relay_info.split(":")
-        # relay_port = int(relay_port)
 
-        subject = "Message from TCP Mail Client"
-        from_addr = f"{self.client._get_local_ip()}:{self.client.listen_port}"
+        subject = f"Message from {self.username}"
+        from_addr = (
+            f"{self.username}@{self.client._get_local_ip()}:{self.client.listen_port}"
+        )
 
         resp = self.client.send_via_relay(
-            relay_ip=ip,
-            relay_port=port,
-            to="relay",  # handled by the server logic
+            relay_ip=relay_ip,
+            relay_port=relay_port,
+            to=relay_nickname,
             subject=subject,
             body=body,
             from_addr=from_addr,
         )
 
-        self.message_box.clear()
+        self.ui.user_message.clear()
         self.update_graphics_view(
-            f"Sent to relay {relay_ip}:{relay_port}\n{body}\n(Response: {resp})"
+            f"Sent to {relay_nickname} at {relay_ip}:{relay_port}\n{body}\n(Response: {resp})"
         )
         print("Relay response:", resp)
 
@@ -174,8 +186,6 @@ class MailApp(QtWidgets.QMainWindow):
 
 
 # ---------------- LOGIN WINDOW ---------------- #
-
-
 class Login(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -183,33 +193,43 @@ class Login(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.ui.loginButton.clicked.connect(self.validateLogin)
 
-    def validateLogin(self):
-        username = self.ui.usernameEdit.text()
-        port_str = self.ui.portNum.text()
-        port = int(port_str) if port_str.isdigit() else None
+        # Optional: hide port/IP widgets from UI if you don't want them anymore
+        # self.ui.ipEdit.hide()
+        # self.ui.label_2.hide()
+        # self.ui.portNum.hide()
+        # self.ui.label_3.hide()
 
-        if port == 0 or port is None:
-            port = random.randint(1024, 65535)  # assign random port if none
-        if port < 1024 or port > 65535:  # check port range if one provided
+    def validateLogin(self):
+        username = self.ui.usernameEdit.text().strip()
+
+        if not username:
+            QtWidgets.QMessageBox.warning(self, "Error", "Please enter a username.")
+            return
+
+        if not self.ui.termsCheck.isChecked():
             QtWidgets.QMessageBox.warning(
-                self, "Error", "Port number must be between 1024 and 65535."
+                self, "Error", "You must accept the terms and conditions."
             )
             return
 
-        if username != None and self.ui.termsCheck.isChecked():
-            users[username] = port  # store user info then proceed to chat
-            self.mail_app = MailApp(port)
-            self.mail_app.show()
-            self.close()
-        else:
-            QtWidgets.QMessageBox.warning(
-                self, "Error", "Invalid Login Details or Terms not accepted."
-            )
+        # Choose a random free port in allowed range
+        port = random.randint(1024, 65535)
+
+        # Get this client's local IP automatically
+        # (temporary TCPMailClient just to reuse _get_local_ip)
+        temp_client = TCPMailClient(port)
+        local_ip = temp_client._get_local_ip()
+
+        # Register this user so others can reach them by nickname
+        users[username] = (local_ip, port)
+
+        # Open main chat window
+        self.mail_app = MailApp(username, port)
+        self.mail_app.show()
+        self.close()
 
 
 def main():
-    import sys
-
     app = QtWidgets.QApplication(sys.argv)
     loginWindow = Login()
     loginWindow.show()
@@ -218,3 +238,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+# ---------------- DASHBOARD.PY ---------------- #
