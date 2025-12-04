@@ -126,8 +126,8 @@ class MailApp(QtWidgets.QMainWindow):
 
     def logout(self):
         """Remove user from list and close """
-        if self.username in users:
-            del users[self.username]
+        #if self.username in users:
+        #    del users[self.username]
         self.client.stop_listener()
         self.window = Login()
         self.window.show()
