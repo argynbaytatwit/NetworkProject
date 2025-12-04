@@ -6,7 +6,7 @@
 
 
 import sys
-import json
+import json, requests, base64
 import socket
 import threading
 from Dashboard import Ui_MainWindow
@@ -14,20 +14,51 @@ from login import Ui_loginWindow
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import *
 import random
-import requests
+
 #userlist csv inplace of a long term more secure/permanent database
 
 # userlist csv inplace of a long term more secure/permanent database
 import csv
 
 filepath = "https://raw.githubusercontent.com/aarcand3/userlist_COMP2100NetworkProgramming/main/users.json"
+token = "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"
+repo = "aarcand3/userlist_COMP2100NetworkProgramming"
+path = "users.json"
 
-response = requests.get(filepath)
-users = response.json()
-users = {"username": ("IP", "port")}
+url = f"https://api.github.com/repos/{repo}/contents/{path}"
+headers = {"Authorization": f"token {token}"}
 
-for username, (ip, port) in users.items():
-    print(f"{username} → IP: {ip}, Port: {port}")
+def register_user(username, ip, port):
+    # Step 1: Get current file from GitHub
+    response = requests.get(url, headers=headers)
+    data = response.json()
+
+    # Decode existing content
+    if "content" in data:
+        content = base64.b64decode(data["content"]).decode()
+        users = json.loads(content) if content.strip() else {}
+        sha = data["sha"]
+    else:
+        users = {}
+        sha = None
+
+    # Step 2: Add new user
+    users[username] = [ip, port]
+    new_content = json.dumps(users, indent=4)
+    b64_content = base64.b64encode(new_content.encode()).decode()
+
+    # Step 3: Commit update back to GitHub
+    update = {
+        "message": f"Register user {username}",
+        "content": b64_content,
+        "sha": sha,
+        "branch": "main"
+    }
+    put_response = requests.put(url, headers=headers, data=json.dumps(update))
+    return put_response.json()
+
+
+
 
 # ---------------- TCP CLIENT CLASS ---------------- #
 class TCPMailClient:
@@ -225,7 +256,7 @@ class Login(QtWidgets.QMainWindow):
 
     def validateLogin(self):
         username = self.ui.usernameEdit.text().strip()
-        filepath = "userlist.csv"
+
         if not username:
             QtWidgets.QMessageBox.warning(self, "Error", "Please enter a username.")
             return
@@ -244,15 +275,10 @@ class Login(QtWidgets.QMainWindow):
         temp_client = TCPMailClient(port)
         local_ip = temp_client._get_local_ip()
 
-        # Register this user so others can reach them by nickname
+        # Register this user to reach with nickname
         userdata = {username: (local_ip, port)}
         with open(filepath, "r") as f:
             users = json.load(f)
-
-    # Add a new user
-        users["charlie"] = ["192.168.1.20", 7070]
-
-    # Save back to users.json
         with open("users.json", "w") as f:
             json.dump(users, f, indent=4) 
             
