@@ -276,11 +276,9 @@ class Login(QtWidgets.QMainWindow):
         local_ip = temp_client._get_local_ip()
 
         # Register this user to reach with nickname
-        userdata = {username: (local_ip, port)}
-        with open(filepath, "r") as f:
-            users = json.load(f)
-        with open("users.json", "w") as f:
-            json.dump(users, f, indent=4) 
+        register = register_user(username, local_ip, port)
+        print("GitHub update response:", register)
+
             
         # Open main chat window
         self.mail_app = MailApp(username, port)
