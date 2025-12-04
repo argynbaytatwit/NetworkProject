@@ -246,19 +246,16 @@ class Login(QtWidgets.QMainWindow):
 
         # Register this user so others can reach them by nickname
         userdata = {username: (local_ip, port)}
-        with open(filepath, mode="r") as data:
-            csv_reader = csv.reader(data)
-            for row in csv_reader:
-                if row[0] == username:
-                    QMessageBox.warning(
-                        self, "Cannot Create User.", "User already exists."
-                    )
-                    return
-                else:
-                    with open(filepath, mode="a", newline="") as file:
-                        writer = csv.writer(file)
-                        writer.writerow(userdata)
+        with open(filepath, "r") as f:
+            users = json.load(f)
 
+    # Add a new user
+        users["charlie"] = ["192.168.1.20", 7070]
+
+    # Save back to users.json
+        with open("users.json", "w") as f:
+            json.dump(users, f, indent=4) 
+            
         # Open main chat window
         self.mail_app = MailApp(username, port)
         self.mail_app.show()
