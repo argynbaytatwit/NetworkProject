@@ -12,10 +12,13 @@ import threading
 from Dashboard import Ui_MainWindow
 from login import Ui_loginWindow
 from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import *
 import random
+#userlist csv inplace of a long term more secure/permanent database
+import csv
 
 
-users = {}  # {username: (ip, port)}
+users = ["username", "IP", "port"]
 
 
 # ---------------- TCP CLIENT CLASS ---------------- #
@@ -122,10 +125,12 @@ class MailApp(QtWidgets.QMainWindow):
         self.ui.pushButton_2.clicked.connect(self.refresh_inbox)
 
     def logout(self):
-        # remove this user from dictionary
+        """Remove user from list and close """
         if self.username in users:
             del users[self.username]
         self.client.stop_listener()
+        self.window = Login()
+        self.window.show()
         self.close()
 
     def on_message_received(self, packet, addr):
@@ -193,15 +198,9 @@ class Login(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.ui.loginButton.clicked.connect(self.validateLogin)
 
-        # Optional: hide port/IP widgets from UI if you don't want them anymore
-        # self.ui.ipEdit.hide()
-        # self.ui.label_2.hide()
-        # self.ui.portNum.hide()
-        # self.ui.label_3.hide()
-
     def validateLogin(self):
         username = self.ui.usernameEdit.text().strip()
-
+        filepath = "userlist.csv"
         if not username:
             QtWidgets.QMessageBox.warning(self, "Error", "Please enter a username.")
             return
@@ -221,7 +220,17 @@ class Login(QtWidgets.QMainWindow):
         local_ip = temp_client._get_local_ip()
 
         # Register this user so others can reach them by nickname
-        users[username] = (local_ip, port)
+        userdata = [username, local_ip, port]
+        with open(filepath, mode="r") as data:
+            csv_reader = csv.reader(data)
+            for row in csv_reader:
+                if row[0] == username:
+                    QMessageBox.warning(self, "Cannot Create User.", "User already exists.")
+                    return
+                else:
+                    with open(filepath, mode = "a", newline='') as file:
+                        writer = csv.writer(file)
+                        writer.writerow(userdata)
 
         # Open main chat window
         self.mail_app = MailApp(username, port)
