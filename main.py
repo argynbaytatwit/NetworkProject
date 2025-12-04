@@ -16,12 +16,15 @@ from PyQt5.QtWidgets import *
 import random
 import requests
 #userlist csv inplace of a long term more secure/permanent database
+
+# userlist csv inplace of a long term more secure/permanent database
 import csv
 
 filepath = "https://raw.githubusercontent.com/aarcand3/userlist_COMP2100NetworkProgramming/main/users.json"
 
 response = requests.get(filepath)
 users = response.json()
+users = {"username": ("IP", "port")}
 
 for username, (ip, port) in users.items():
     print(f"{username} → IP: {ip}, Port: {port}")
@@ -130,8 +133,8 @@ class MailApp(QtWidgets.QMainWindow):
         self.ui.pushButton_2.clicked.connect(self.refresh_inbox)
 
     def logout(self):
-        """Remove user from list and close """
-        #if self.username in users:
+        """Remove user from list and close"""
+        # if self.username in users:
         #    del users[self.username]
         self.client.stop_listener()
         self.window = Login()
@@ -149,23 +152,40 @@ class MailApp(QtWidgets.QMainWindow):
 
     def send_message(self):
         """Send a message using user input in UI."""
-        # relay_info is now just the OTHER USER'S NICKNAME
-        relay_nickname = self.ui.sendtoEdit.text().strip()
+        target = self.ui.sendtoEdit.text().strip()  # can be username OR ip:port
         body = self.ui.user_message.toPlainText().strip()
 
-        if not relay_nickname or not body:
+        if not target or not body:
             QtWidgets.QMessageBox.warning(self, "Error", "Please fill in all fields.")
             return
 
-        # Lookup relay IP and port from users dictionary by nickname
-        if relay_nickname in users:
-            relay_ip, relay_port = users[relay_nickname]
-        else:
-            QtWidgets.QMessageBox.warning(
-                self, "Error", f"Unknown user: {relay_nickname}"
-            )
-            return
+        # -------------------------------------------------------
+        # CASE 1: User entered ip:port directly
+        # -------------------------------------------------------
+        if ":" in target:
+            try:
+                relay_ip, relay_port = target.split(":")
+                relay_port = int(relay_port)
+                to_field = target
+            except ValueError:
+                QtWidgets.QMessageBox.warning(
+                    self, "Error", "Format must be username OR ip:port"
+                )
+                return
 
+        # -------------------------------------------------------
+        # CASE 2: User entered username → look up in dictionary
+        # -------------------------------------------------------
+        else:
+            if target not in users:
+                QtWidgets.QMessageBox.warning(self, "Error", f"Unknown user: {target}")
+                return
+            relay_ip, relay_port = users[target]
+            to_field = target
+
+        # -------------------------------------------------------
+        # Prepare and send message
+        # -------------------------------------------------------
         subject = f"Message from {self.username}"
         from_addr = (
             f"{self.username}@{self.client._get_local_ip()}:{self.client.listen_port}"
@@ -174,7 +194,7 @@ class MailApp(QtWidgets.QMainWindow):
         resp = self.client.send_via_relay(
             relay_ip=relay_ip,
             relay_port=relay_port,
-            to=relay_nickname,
+            to=to_field,
             subject=subject,
             body=body,
             from_addr=from_addr,
@@ -182,7 +202,7 @@ class MailApp(QtWidgets.QMainWindow):
 
         self.ui.user_message.clear()
         self.update_graphics_view(
-            f"Sent to {relay_nickname} at {relay_ip}:{relay_port}\n{body}\n(Response: {resp})"
+            f"Sent to {target} at {relay_ip}:{relay_port}\n{body}\n(Response: {resp})"
         )
         print("Relay response:", resp)
 
@@ -225,15 +245,17 @@ class Login(QtWidgets.QMainWindow):
         local_ip = temp_client._get_local_ip()
 
         # Register this user so others can reach them by nickname
-        userdata = {username:( local_ip, port)}
+        userdata = {username: (local_ip, port)}
         with open(filepath, mode="r") as data:
             csv_reader = csv.reader(data)
             for row in csv_reader:
                 if row[0] == username:
-                    QMessageBox.warning(self, "Cannot Create User.", "User already exists.")
+                    QMessageBox.warning(
+                        self, "Cannot Create User.", "User already exists."
+                    )
                     return
                 else:
-                    with open(filepath, mode = "a", newline='') as file:
+                    with open(filepath, mode="a", newline="") as file:
                         writer = csv.writer(file)
                         writer.writerow(userdata)
 
