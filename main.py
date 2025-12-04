@@ -18,7 +18,7 @@ import random
 import csv
 
 
-users = ["username", "IP", "port"]
+users = {"username":("IP", "port")}
 
 
 # ---------------- TCP CLIENT CLASS ---------------- #
@@ -220,7 +220,7 @@ class Login(QtWidgets.QMainWindow):
         local_ip = temp_client._get_local_ip()
 
         # Register this user so others can reach them by nickname
-        userdata = [username, local_ip, port]
+        userdata = {username:( local_ip, port)}
         with open(filepath, mode="r") as data:
             csv_reader = csv.reader(data)
             for row in csv_reader:
