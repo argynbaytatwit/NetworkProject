@@ -14,12 +14,17 @@ from login import Ui_loginWindow
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import *
 import random
+import requests
 #userlist csv inplace of a long term more secure/permanent database
 import csv
 
+filepath = "https://raw.githubusercontent.com/aarcand3/userlist_COMP2100NetworkProgramming/main/users.json"
 
-users = {"username":("IP", "port")}
+response = requests.get(filepath)
+users = response.json()
 
+for username, (ip, port) in users.items():
+    print(f"{username} → IP: {ip}, Port: {port}")
 
 # ---------------- TCP CLIENT CLASS ---------------- #
 class TCPMailClient:
