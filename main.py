@@ -6,7 +6,7 @@
 
 
 import sys
-import json, requests, base64
+import json
 import socket
 import threading
 from Dashboard import Ui_MainWindow
@@ -15,49 +15,11 @@ from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import *
 import random
 
-#userlist csv inplace of a long term more secure/permanent database
-
 # userlist csv inplace of a long term more secure/permanent database
 import csv
 
-filepath = "https://raw.githubusercontent.com/aarcand3/userlist_COMP2100NetworkProgramming/main/users.json"
-token = "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"
-repo = "aarcand3/userlist_COMP2100NetworkProgramming"
-path = "users.json"
 
-url = f"https://api.github.com/repos/{repo}/contents/{path}"
-headers = {"Authorization": f"token {token}"}
-
-def register_user(username, ip, port):
-    # Step 1: Get current file from GitHub
-    response = requests.get(url, headers=headers)
-    data = response.json()
-
-    # Decode existing content
-    if "content" in data:
-        content = base64.b64decode(data["content"]).decode()
-        users = json.loads(content) if content.strip() else {}
-        sha = data["sha"]
-    else:
-        users = {}
-        sha = None
-
-    # Step 2: Add new user
-    users[username] = [ip, port]
-    new_content = json.dumps(users, indent=4)
-    b64_content = base64.b64encode(new_content.encode()).decode()
-
-    # Step 3: Commit update back to GitHub
-    update = {
-        "message": f"Register user {username}",
-        "content": b64_content,
-        "sha": sha,
-        "branch": "main"
-    }
-    put_response = requests.put(url, headers=headers, data=json.dumps(update))
-    return put_response.json()
-
-
+users = {"username": ("IP", "port")}
 
 
 # ---------------- TCP CLIENT CLASS ---------------- #
@@ -256,7 +218,7 @@ class Login(QtWidgets.QMainWindow):
 
     def validateLogin(self):
         username = self.ui.usernameEdit.text().strip()
-
+        filepath = "userlist.csv"
         if not username:
             QtWidgets.QMessageBox.warning(self, "Error", "Please enter a username.")
             return
@@ -275,11 +237,21 @@ class Login(QtWidgets.QMainWindow):
         temp_client = TCPMailClient(port)
         local_ip = temp_client._get_local_ip()
 
-        # Register this user to reach with nickname
-        register = register_user(username, local_ip, port)
-        print("GitHub update response:", register)
+        # Register this user so others can reach them by nickname
+        userdata = {username: (local_ip, port)}
+        with open(filepath, mode="r") as data:
+            csv_reader = csv.reader(data)
+            for row in csv_reader:
+                if row[0] == username:
+                    QMessageBox.warning(
+                        self, "Cannot Create User.", "User already exists."
+                    )
+                    return
+                else:
+                    with open(filepath, mode="a", newline="") as file:
+                        writer = csv.writer(file)
+                        writer.writerow(userdata)
 
-            
         # Open main chat window
         self.mail_app = MailApp(username, port)
         self.mail_app.show()
